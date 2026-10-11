@@ -1,7 +1,7 @@
 {
   "name": "rea-agents",
   "mcpName": "io.github.morluto/rea",
-  "version": "6.3.0",
+  "version": "6.4.0",
   "description": "Reverse engineer anything from your terminal or agent with one CLI and MCP server.",
   "license": "MIT",
   "repository": {
@@ -81,7 +81,8 @@
     "bridge/pwndbg/launch_impl.py",
     "bridge/pwndbg/core_context.py",
     "third_party/pwndbg/README.md",
-    "third_party/pwndbg/LICENSE.md"
+    "third_party/pwndbg/LICENSE.md",
+    "licenses/nativeaot-parser-MIT.txt"
   ],
   "scripts": {
     "release:notes": "node scripts/release-notes.mjs",
@@ -291,6 +292,7 @@
     "plist": "5.0.0",
     "semver": "7.8.5",
     "smol-toml": "1.9.0",
+    "stream-chain": "4.2.6",
     "stream-json": "3.7.0",
     "write-file-atomic": "7.0.0",
     "ws": "8.21.0",
