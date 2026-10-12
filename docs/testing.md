@@ -112,8 +112,12 @@ Set `REA_VERIFY_HERMES_STICKY_PROFILE=1` to exercise native Hermes selection of
 a named sticky profile with `HERMES_HOME` still pointing to its root.
 
 `verify:gemini-client` requires an installed Gemini CLI (verified with
-`@google/gemini-cli@0.63.0`); select it with `REA_VERIFY_GEMINI_COMMAND`.
-The optional POSIX lane uses native `GEMINI_CLI_HOME` discovery in an isolated
+`@google/gemini-cli@0.63.0` on POSIX and native Windows); select it with
+`REA_VERIFY_GEMINI_COMMAND`. A selected `.js`, `.mjs` or `.cjs` entry point runs
+under the verifier's Node. On Windows, select the npm install's
+`node_modules/@google/gemini-cli/bundle/gemini.js`, because only a `gemini.cmd`
+shim reaches `PATH`.
+The optional lane uses native `GEMINI_CLI_HOME` discovery in an isolated
 Git project, checks setup plans, backups and idempotence, activates the installed
 personal skill, validates all forwarded input JSON Schemas against their declared
 dialect, forwards the complete REA catalog and checks full JavaScript
@@ -121,7 +125,7 @@ Evidence for a Unicode path. Use `-- chat` for ordinary chat with REA enabled,
 or `REA_VERIFY_RUNTIME_ROOT` for a production-only installed REA package.
 The local fixture exercises the real Gemini API adapter, including its
 `untrusted_context` tool-result envelope. Token counts are synthetic; live
-Google API and native Windows compatibility remain unverified. The lane disables
+Google API compatibility remains unverified. The lane disables
 the client's memory-based relaunch to preserve the caller's Node heap budget.
 
 `verify:opencode-client` requires an installed OpenCode (verified with
@@ -139,8 +143,11 @@ directory, so default OS-home discovery remains unverified. Live model APIs and
 native Windows are also unverified.
 
 `verify:claude-client` requires installed Claude Code (verified with
-`@anthropic-ai/claude-code@2.1.296`); select it with `REA_VERIFY_CLAUDE_COMMAND`.
-The optional POSIX lane uses native `CLAUDE_CONFIG_DIR` discovery, an independent
+`@anthropic-ai/claude-code@2.1.296` on POSIX and native Windows); select it
+with `REA_VERIFY_CLAUDE_COMMAND`. On Windows, select
+`claude.exe`: npm installs put only a `claude.cmd` shim on `PATH`, and the real
+executable is under `node_modules/@anthropic-ai/claude-code/bin`.
+The optional lane uses native `CLAUDE_CONFIG_DIR` discovery, an independent
 Git workspace, user settings and default built-in tools. It preserves caller
 preferences and backups, checks idempotent setup, waits through the native
 `WaitForMcpServers` tool when discovery is pending, and validates the complete
@@ -149,8 +156,8 @@ native `Skill`, checks its full body and verifies named-schema JavaScript Eviden
 for a Unicode path. Use `-- chat` for ordinary chat with REA enabled, or
 `REA_VERIFY_RUNTIME_ROOT` for a production-only installed package. The local
 Anthropic Messages/SSE fixture preserves native resource-hint envelopes in its
-request artifacts. Usage is synthetic; live Anthropic API, native Windows and
-bare-mode personal-skill activation remain unverified by this lane.
+request artifacts. Usage is synthetic; live Anthropic API and bare-mode
+personal-skill activation remain unverified by this lane.
 
 `verify:copilot-client` requires installed GitHub Copilot CLI (verified with
 `@github/copilot@1.0.95`); select it with `REA_VERIFY_COPILOT_COMMAND`.
@@ -265,9 +272,13 @@ unverified; skill discovery uses an explicit isolated custom directory.
 `verify:deepseek-client` requires an installed DeepSeek Harness (`dsh`;
 verified with `@deepseek-ai/dsh@0.2.0-rc.2`) and Git. Set
 `REA_VERIFY_DEEPSEEK_COMMAND` to select its executable. This optional POSIX lane
-installs the skill through `rea setup --skill`, writes the native Cordis MCP
-patch into an isolated `DSH_HOME`, and binds `HOME` and `USERPROFILE` to the
-disposable account. The native default `~/.agents/skills` search path discovers
+seeds caller model settings and a stale Cordis registration in an isolated
+`DSH_HOME`, then runs public `setup --client dsh` dry-run, setup, repeated setup,
+and scoped doctor. It checks the backup and unrelated patches before booting
+Harness with the generated registration. After native execution it uninstalls
+through the public CLI and checks that only caller patches remain. `HOME` and
+`USERPROFILE` point to the disposable account. The native default
+`~/.agents/skills` search path discovers
 the installed skill without a `DSH_AGENTS_HOME` override. A separate Git root prevents inherited project skills from
 masking a missing installation. The default `call` mode checks skill loading,
 complete catalog discovery, the actual forwarded input schemas and regexes,
@@ -278,11 +289,19 @@ context capacity declared by its default DeepSeek Flash model; it does not
 establish live DeepSeek API or native Windows coverage. Receipts include
 request artifacts, result digests and owned-process lineage.
 
+The DSH acceptance journey also exercises public setup, approval, doctor,
+generated-launcher MCP startup and uninstall without an installed Harness.
+That journey proves REA workflow behavior, not native Cordis expression
+evaluation. Filesystem regressions retain tagged values and unrelated rows
+across alias dependencies and check refusal of unsafe YAML without mutation.
+
 Full E2E tests invoke the production command dispatcher and real providers,
-without fake launchers, runners or responses. `verify:keyed-archive` writes an
-actual Foundation binary archive, runs the CLI and a separate stdio MCP
-subprocess, checks parity and pagination, rejects an escaping path and checks
-an XML graph golden. `verify:asset-catalog` compiles source-owned colors with
+without fake launchers, runners or responses. `verify:keyed-archive` writes
+Foundation binary, XML, and integer archives using one run-owned Swift module
+cache. It checks CLI and separate stdio MCP parity, pagination, escaping-path
+rejection, an XML graph golden, and numeric meaning for safe controls, unsafe
+integers, boxed numbers, and integral-valued reals. `verify:asset-catalog`
+compiles source-owned colors with
 `actool`, invokes real `assetutil`, then checks CLI/MCP results, exact catalog
 digest, every raw metadata field, pagination and malformed input rejection.
 Neither artifact workflow requires Hopper or launches it. Both run in macOS CI.
@@ -458,7 +477,7 @@ prove behavior on the verified Ghidra 12.1.4 and JDK 21 build.
 | Ghidra lane                                | Supported runner/target                                                                         | Additional local tools                                              |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | `npm run verify:ghidra`                    | Linux x64/arm64 ELF or macOS x64/arm64 Mach-O                                                   | Host C compiler, Ghidra 12.1.4, and full JDK 21                     |
-| `npm run verify:ghidra:seeds`              | POSIX host; source-owned 32-bit x86 raw fixture; function order and BSS labels                  | Ghidra 12.1.4 and full JDK 21                                       |
+| `npm run verify:ghidra:seeds`              | POSIX; raw x86 fixture; seed ordering, BSS labels, analyzer readback and unknown-name rejection | Ghidra 12.1.4 and full JDK 21                                       |
 | `npm run verify:ghidra:swift`              | macOS x64/arm64 Mach-O                                                                          | Host Swift compiler, Ghidra 12.1.4, and full JDK 21                 |
 | `npm run verify:ghidra:switch`             | Linux x64 ELF; GCC/Clang optimized and stripped switch fixtures                                 | GCC, Clang, GNU nm/objdump/strip, Ghidra 12.1.4, and full JDK 21    |
 | `npm run verify:ghidra:aarch64-jump-table` | Any supported Ghidra host; AArch64 ELF; signed/unsigned byte/halfword tables; host ARM64 Mach-O | Clang with AArch64 target support, Ghidra 12.1.4, and full JDK 21   |
@@ -482,6 +501,13 @@ not require Ghidra or Java. It includes Job Object commit-limit controls (a
 limited child that reaches the limit, a control that does not, and invalid
 limit rejection). An optional independently compiled Windows fixture
 adds in-place reparse, breakaway, environment, and token observations.
+The separate `scripts/verify-windows-native-inspection.mjs` lane uses the
+`.cache/windows-native-inspection-fixture` artifact built on Linux with
+`node scripts/build-windows-native.mjs --inspection-fixture`. Its controlled
+first deletion failure checks retained NTFS ownership, later-query recovery,
+successful-admission caching, and environment-teardown cleanup. It neither
+establishes the cause of the intermittent #1701 host failure nor replaces
+verification with the shipped production artifact.
 `npm run verify:ghidra:windows:package` additionally packs and installs REA into
 an isolated prefix and runs ordinary-user CLI/MCP operations against their
 canonical schemas. Run the controlled fixture generator before that lane, or
@@ -625,6 +651,18 @@ decoded manifest. The dedicated Dart snapshot processor and `run_script`
 remain GUI-only surfaces in JEB 5.48.0 headless.
 Authenticated IPA and macOS application inventory projection is documented in
 [Apple application analysis](apple-application-analysis.md).
+
+`npm run verify:harmony` requires no SDK or engine. It projects the pinned
+harmony-next-pipeline 1.0.1 release HAP from an MIT-licensed source repository,
+fetched by `npm run fixtures:harmony` into ignored
+`_reference/harmony-integration/`, set as `REA_HARMONY_TEST_HAP`.
+The lane exercises `inspect_artifact`, projection determinism, Stage-model
+path hints, exact component sets, signing-entry limitations, and CLI/MCP parity.
+The release artifact has no independently established compiler/SDK or
+reproducible source build; the default lane does not verify an installed package.
+See [HarmonyOS package inventory](harmony-analysis.md) for those proof boundaries.
+HarmonyOS `.har` libraries are deliberately not suffix-classified because
+`.har` also names HTTP Archive JSON.
 
 Synthetic producer regressions run independently:
 
@@ -774,6 +812,16 @@ truncation constraint, while leading-zero coordinates still resolve correctly.
 It has the same Ghidra/JDK prerequisites as the MZ lane. Neither lane claims DOS
 runtime or PC-98 device execution.
 
+`npm run verify:ghidra:raw` uses a generated ARM little-endian headerless image
+through the compiled CLI and stdio MCP server. With the same Ghidra/JDK
+prerequisites, it checks preparation and bridge startup, verified load mappings,
+instruction and byte readback, canonical-entry session reuse, replacement when
+the entry changes without `provider_id`, unchanged source bytes, and owned
+cleanup. Six-byte x86 and x86_64 controls also verify supported compiler
+specifications, independent mappings, unchanged bytes, and decompilation of a
+known return value. AArch64 remains covered by deterministic tests rather than
+this real-provider lane. See [raw binary analysis](raw-binary.md).
+
 ## Apple Interface Builder archives
 
 `npm run verify:interface-builder` compiles the source-owned AppKit XIB into a
@@ -789,25 +837,42 @@ not make native host acceptance unavailable.
 ## Native platform baseline in CI
 
 Pull requests that change only root `README*.md` files, `docs/`, `AGENTS.md`,
-or `CONTRIBUTING.md` run formatting and generated-document validation without
-the source-test shards or native package lanes. Classification compares the PR
-head with its merge base, so later base-branch changes do not expand that scope.
-Static and coverage aggregate jobs remain present and fail if classification
-fails. Every code change retains the complete four-shard Linux suite; individual
-test files are not selected by imports or filenames.
+`CONTRIBUTING.md`, `CHANGELOG.md`, `SECURITY.md`, `native/windows/README.md`,
+or the GitHub issue and pull-request templates run formatting and
+generated-document validation without the source-test shards or native package
+lanes. Classification compares the PR head with its merge base, so later
+base-branch changes do not expand that scope. Static and coverage aggregate jobs
+remain present and fail if classification fails. Every code change retains the
+complete six-shard Linux suite; individual test files are not selected by
+imports or filenames.
 
 `scripts/ci/plan.mjs` selects lanes using the ownership table in
 `scripts/ci/scopes.mjs`. Provider implementation changes run their real-provider
-verifiers and the Linux x64 installed-package/Inspector baseline. Test-only
-changes run the Linux suite without native package verification. Website changes
-run website checks. Provider workflow changes validate the workflow and run that provider's verifier.
-Manual-provider/Android workflow changes run workflow validation only.
-Shared process/contract/CLI boundaries, dependencies, packaging inputs, unknown
-paths, and changes to the planner select the full baseline. Package script-only
-edits select their owning verifier when its entrypoint is identifiable; unknown
-or shared script changes select everything. Android build-script edits retain
-the Linux suite and workflow validation; real Android verification stays manual.
-Renames account for both paths.
+verifiers and the Linux x64 installed-package/Inspector baseline. The `apple`
+scope owns the Apple artifact lane; the `package` scope owns the multi-host
+package matrix and the Windows curated lane, including Windows native controls,
+Inspector, setup, configuration and packaging entrypoints. Runtime sources under
+`src/` or `bridge/` without an owner, and the authored skill, run the Linux suite
+and the Linux x64 installed-package/Inspector baseline only. Test-only changes
+run the Linux suite without native package verification, except test files that
+the Apple or Windows curated lanes invoke explicitly, which also select that
+lane. Edits to verifier entrypoints run only by manual, licensed or self-hosted
+workflows run static checks and the Linux suite. Website changes run website
+checks. Provider workflow changes validate the workflow and run that provider's
+verifier. Manual-provider/Android workflow changes run workflow validation only.
+Shared process/contract/CLI boundaries, dependencies, other packaging inputs,
+unknown paths, and changes to the planner select the full baseline. Package
+script-only edits select their owning verifier when its entrypoint is
+identifiable; unknown or shared script changes select everything. Android
+build-script edits retain the Linux suite and workflow validation; real Android
+verification stays manual. Renames account for both paths.
+
+This narrower selection trades PR-time coverage for runner capacity. A change to
+unowned shared runtime code that fails only on arm64, macOS, Windows, the Apple
+artifact lane, or a provider lane that does not own the file is not caught on
+the PR; the main-push full baseline reports it after merge. Ownership globs do
+not follow imports. Use the `ci:full` label when a change may have native-host
+or provider effects outside its owners.
 
 Main pushes and manual dispatch retain the full baseline, including all portable
 provider lanes and the native matrix below. A `ci:full` PR label selects the full
@@ -831,12 +896,16 @@ CI exercises the pinned Node.js runtime on native hosted runners:
 | Linux x64             | `ubuntu-latest`    | Installed package and real Node Inspector CLI/MCP                                        |
 | Linux arm64 (aarch64) | `ubuntu-24.04-arm` | Installed package and real Node Inspector CLI/MCP                                        |
 | macOS 15 arm64        | `macos-15`         | Installed package and real Node Inspector CLI/MCP                                        |
-| macOS 15 x64          | `macos-15-intel`   | Installed package and real Node Inspector CLI/MCP                                        |
+| macOS 15 x64          | `macos-15-intel`   | Installed package and real Node Inspector CLI/MCP (main, dispatch and `ci:full` only)    |
 | Windows x64           | `windows-latest`   | Curated capabilities, native controls, installed package and real Node Inspector CLI/MCP |
 
+macOS x64 is the slowest package host. Pull requests without the `ci:full` label
+omit it, so darwin x64 installed-package and Inspector regressions surface on
+the main-push full baseline rather than on the PR.
+
 Package lanes assert the actual Node platform/architecture before verification
-and record those values with the Node version. The four-host package matrix
-runs up to four jobs concurrently on independent hosted runners with explicit
+and record those values with the Node version. The package matrix runs up to
+four jobs concurrently on independent hosted runners with explicit
 timeouts and per-runner Node heap/thread limits; Windows retains its curated
 capability lane. Package checks cover installation, CLI/MCP discovery,
 target-free analysis, configuration backups/recovery, Evidence and owned
@@ -915,7 +984,7 @@ behavior, and complete CI evidence before merging.
 | `npm run test:focused -- PATH...` | Exact existing test files; compiled boundaries build first, and unmatched paths fail                                    |
 | `npm run test:changed`            | Source tests affected since the merge base with `origin/main`, including committed and dirty changes                    |
 | `npm run test:fast`               | All domain, service, adapter, composition, conformance, and evaluation tests without build                              |
-| `npm run test:boundary`           | Boundary, MCP boundary, process boundary, and process-global projects                                                   |
+| `npm run test:boundary`           | Boundary, CLI boundary, MCP boundary, process boundary, and process-global projects                                     |
 | `npm run test:mcp`                | MCP boundary project                                                                                                    |
 | `npm run test:acceptance`         | Complete compiled CLI and MCP acceptance workflows                                                                      |
 | `npm run test:watch`              | Dirty source tests in watch mode, without build                                                                         |
@@ -945,6 +1014,11 @@ it or select another revision.
 
 Source typechecking needs no compiled runtime or generated test metadata.
 `npm run build:cached` compiles the CLI/MCP runtime and its packaged skill.
+Turbo's strict task environment preserves caller-selected `GOMAXPROCS`,
+`GOMEMLIMIT`, and `UV_THREADPOOL_SIZE` for resource-constrained builds and
+checks. These execution controls do not change artifact content, so changing
+their values retains cache reuse. They control individual runtimes; monitor
+the complete process family separately when enforcing a total memory budget.
 `npm run test:prepare` also generates the MCP contract test catalog, product
 catalog, and portable managed evidence used by the complete suite. Focused
 tests prepare those extra outputs only when their selected files consume them.
@@ -972,11 +1046,18 @@ Vitest projects use up to two workers, bounded by host parallelism.
 `process-boundary` runs later with serial files because process-tree sampling
 shares host resources. Acceptance and process-global cases use isolated forks
 without serial scheduling. Pure domain/service, composition, conformance,
-evaluation, and MCP boundary projects share module graphs; their tests avoid
-process-global state and keep resource cleanup test-scoped. Each MCP session
-still owns its resources. Adapter, non-MCP boundary, acceptance, and
-process-global projects retain per-file isolation. See `vitest.config.ts` for
-current settings.
+evaluation, CLI boundary, and MCP boundary projects share module graphs. Their
+tests avoid process-global state and keep resource cleanup test-scoped. Each
+MCP session still owns its resources, and CLI cases retain fresh command
+instances or subprocesses. CLI module mocks belong in `tests/process-global/`
+so they keep per-file isolation. Product catalog verification stays with the
+isolated filesystem boundary tests because it loads both source and compiled
+module graphs. Adapter, other boundary, acceptance, and process-global projects
+retain per-file isolation. See `vitest.config.ts` for current settings.
+
+The reused CLI boundary workers cap V8 old space at 384 MiB, based on their
+profiled allocation and cleanup behavior. This encourages collection between
+files; spawned REA processes retain their own heap settings.
 
 Vitest worker limits do not bound subprocesses launched within a test. Bound
 those batches separately so repeated CLI validation cannot oversubscribe the
@@ -1017,7 +1098,7 @@ CI owns coverage; aggregate and domain/contract thresholds are maintained in
 `vitest.config.ts`. They are glob-specific and never updated automatically.
 Coverage does not replace named boundary or real-provider scenarios.
 
-CI runs four native Vitest shards without retries. Each shard emits a blob
+CI runs six native Vitest shards without retries. Each shard emits a blob
 report; the merge job produces aggregate coverage plus JUnit and JSON timing
 reports, uploads them together, and writes the slowest files to the workflow
 summary. Static checks, documentation, build, package verification, and
@@ -1031,8 +1112,9 @@ architecture, and `.npmrc`; test-only changes can reuse compiled outputs. Every
 build and verification command still runs, so Turbo checks task inputs and
 rebuilds misses. There is no prefix fallback to accumulate older build outputs.
 
-Native package jobs reuse the same workflow's Turbo cache for portable compiled
-JavaScript, skills, and catalogs. They retain the normal build and prepack
+Native package jobs, the Windows curated lane, and the Apple artifact lane reuse
+the same workflow's Turbo cache for portable compiled JavaScript, skills, and
+catalogs. The Windows lane relies on the Linux static job for typechecking. They retain the normal build and prepack
 commands, which restore matching outputs or rebuild on a cache miss. Native
 artifacts, dependency installs, package archives, and runtime verification remain
 host-local. Keep platform-dependent outputs out of this shared cache.
@@ -1331,3 +1413,28 @@ npm run evidence:check
 
 The records preserve unsupported and unverified coverage as explicit unknowns.
 Run the matching real-tool prerequisites described in this guide.
+
+### Offline WASM artifacts
+
+`npm run verify:wasm:artifact -- --require-tools` uses an absolute
+`REA_WABT_BIN_DIRECTORY` containing WABT 1.0.42, including `wat2wasm` for fixture
+generation. It installs nothing. Without configuration, the default invocation
+reports a named skip; `--require-tools` makes missing configuration fail.
+
+The verifier creates and validates real modules with custom sections, multiple
+import/export kinds, escaped names, an empty module, and a bulk-memory
+DataCount section. Debug-name fixtures cover compiler-generated module names
+and preserved name-section payloads with empty, multiline, Unicode, long and
+NUL-containing names. It compares exact WAT,
+section output and selected/tool digests through the compiled CLI and real MCP
+SDK, validates advertised schemas, checks identical CLI/MCP Evidence IDs and
+session bundle readback, retains invalid/truncated module diagnostics, preserves
+all inputs and checks workspace cleanup. Pass an installed package's
+`scripts/rea.mjs` as the first argument to run the same lane against the package.
+`npm run verify:wasm:package` packs and installs REA into an isolated temporary
+prefix with lifecycle scripts disabled and runs the same required real-tool lane.
+It requires WABT configuration and makes no host tool installation.
+
+Source-owned provider tests separately exercise cancellation, deadline propagation,
+malformed producer output and cleanup uncertainty; shared owned-command tests
+exercise actual subprocess timeout and cancellation.

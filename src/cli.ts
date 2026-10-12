@@ -1,11 +1,14 @@
+import { registerWasmCommands } from "./cli/wasmCommands.js";
 import { snapshotEnvironment } from "./process/snapshotEnvironment.js";
 import { createDirectAnalysis } from "./composition/directAnalysis.js";
 import { registerEvmCommands } from "./cli/evmCommands.js";
+import { registerGoCommands } from "./cli/goCommands.js";
 import { registerAnalysisViewCommands } from "./cli/analysisViewCommands.js";
 import { registerBinaryDiagnosticsCommands } from "./cli/binaryDiagnosticsCommands.js";
 import { Cli } from "incur";
 
 import { createLogger, parseLogLevel } from "./logger.js";
+import { projectAnalysisError } from "./domain/analysisErrorProjection.js";
 import { PRODUCT_IDENTITY } from "./identity.js";
 import { npxRegistrationCommand } from "./application/ClientRegistrationIdentity.js";
 import { registerSetupCommands } from "./cli/setupCommands.js";
@@ -39,6 +42,16 @@ import {
   type CliResultOutput,
 } from "./cli/streamedJsonOutput.js";
 
+/** Describe CLI settings that are invalid before any command runs, as MCP does. */
+export const cliConfigurationError = (
+  selectedEnvironment: Readonly<Record<string, string | undefined>>,
+): string | undefined => {
+  const value = selectedEnvironment.REA_LOG_LEVEL;
+  if (value === undefined) return undefined;
+  const level = parseLogLevel(value);
+  return level.ok ? undefined : projectAnalysisError(level.error).message;
+};
+
 /**
  * Build the one-shot Incur CLI without starting Hopper at import time.
  * Analysis commands acquire and close their own sessions; bare `mcp` and
@@ -52,11 +65,14 @@ export const createCli = (
 ): CliInstance => {
   const environment = snapshotEnvironment(selectedEnvironment);
   const analysis = createDirectAnalysis(environment);
+  // The executable reports an invalid level through cliConfigurationError.
+  const level =
+    environment.REA_LOG_LEVEL === undefined
+      ? undefined
+      : parseLogLevel(environment.REA_LOG_LEVEL);
   const logger = createLogger(
     "cli",
-    environment.REA_LOG_LEVEL === undefined
-      ? "silent"
-      : parseLogLevel(environment.REA_LOG_LEVEL),
+    level?.ok === true ? level.value : "silent",
   );
   const cli = Cli.create(PRODUCT_IDENTITY.cliBinary, {
     version: PRODUCT_IDENTITY.packageVersion,
@@ -72,7 +88,9 @@ export const createCli = (
   registerSetupCommands(cli, logger, environment);
   registerCoreAnalysisCommands(cli, logger, analysis.runDirectAnalysis);
   registerUtilityCommands(cli, logger, environment, analysis);
+  registerWasmCommands(cli, logger, environment);
   registerEvmCommands(cli, logger, environment);
+  registerGoCommands(cli, logger);
   registerArtifactCommands(cli, logger, analysis.runProviderAnalysis);
   registerManagedCommands(cli, logger, analysis.runProviderAnalysis);
   registerAndroidCommands(cli, logger, environment);

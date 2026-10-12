@@ -1,5 +1,16 @@
 # Native, managed, and packaged artifacts
 
+## Go build metadata
+
+Use `inspect_go_binary` for an explicit local ELF, PE or thin Mach-O when the
+question concerns the embedded compiler version, module/dependency versions,
+local replacements or build settings. No `open_binary`, Go installation or
+target execution is required. The CLI equivalent is `inspect-go-binary PATH`.
+Preserve artifact SHA-256, original file ranges, framed module bytes and every
+unparsed module-text line. A missing record is an unknown, not proof of a
+non-Go binary; observed metadata does not authenticate its claims. Function,
+source and type recovery remain a separate native-analysis question.
+
 ## Recorded Linux crashes
 
 Use `inspect_recorded_crash` with an explicit Linux x86-64 ELF core path to
@@ -24,6 +35,16 @@ without opening a disassembler target. When that complete record is already
 retained, call `inspect_analysis_view` for a summary, mitigations or linkage
 facet, one section or symbol, or a stable page. Do not re-run the decoder to
 read a single object.
+
+## Offline WASM
+
+Use `inspect_wasm_artifact` with caller-supplied WABT for selected local bytes.
+For a completed result, use `inspect_analysis_view` with its reported retained
+reference for a summary or `view: {kind: "wasm", facet: "exports", offset: 0, limit: 32}`.
+Facets also include sections, imports, candidates, glue, WAT, headers, details
+and tool profile. Text offsets count UTF-16 code units; follow `next_offset`.
+The complete source remains retained after an oversized MCP reply. No target
+execution or network acquisition is implied, and WAT is decoded representation.
 
 ## Native targets
 
@@ -50,10 +71,19 @@ runs and may change files or use the network. Hardened-runtime targets need the
 `get-task-allow` entitlement.
 
 Use `binary_session` with no arguments to check the open target, selected
-provider, and alignment. Its default `result.tool_availability` includes the
-complete tool inventory with availability reasons and remediation. When choosing
-a tool, use its entry in that result; `tools/list` retains the complete catalog
-when the target or provider state changes.
+provider, and alignment. Its default `result.tool_availability` carries a
+complete inventory grouped by shared facts. Expand each group's `names` and
+inherit the inventory-level client requirements unless a group overrides them;
+availability, reasons, remediation, modes, and flags remain inline. The
+`effects` and `annotations` arrays name true flags from fixed vocabularies, so an
+omitted known flag is false. `tools/list` remains the canonical source for full
+tool schemas when target or provider state changes.
+
+Provider capability groups carry provider identity and ordered limitations.
+Prepend each set's `shared_limitations` to a group's `limitations` to recover the
+operation's full ordered list. Candidate capabilities describe possible
+providers. Top-level session capabilities describe the current route, and
+`analysis_provider_binding` identifies the selected provider.
 
 ## DOS MZ with Ghidra
 
@@ -149,6 +179,13 @@ For headerless DOS COM, explicitly open with `format: "dos-com"` (CLI
 `--target-format dos-com`). Inspect the load image before trusting function
 analysis: the entry is `0x10100`, file offset zero, with imposed real-mode segment
 context. PSP/stack/device state remains unmodeled. See [DOS guide](https://github.com/morluto/rea/blob/main/docs/ghidra-dos.md).
+
+For other headerless images (embedded firmware without ELF/Mach-O/PE/MZ
+headers), open with `format: "raw-binary"`, `architecture` (`x86`, `x86_64`,
+`arm`, or `arm64`), and `entry_point` (`0x` hex). File offset 0 is mapped at
+that address. Hopper and IDA refuse this interpretation; Ghidra uses
+`BinaryLoader` with a little-endian generic language. Big-endian, Thumb-only,
+and Cortex-M variants are unsupported. See [raw binary guide](https://github.com/morluto/rea/blob/main/docs/raw-binary.md).
 
 ### Function annotations in Ghidra
 
