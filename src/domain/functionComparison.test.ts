@@ -44,6 +44,16 @@ const dossier = (
     referenced_names: [],
     native_api: null,
     native_value_flow: null,
+    facet_availability: {
+      pseudocode: { available: true },
+      assembly: { available: true },
+      comments: { available: true },
+      callers: { available: true },
+      callees: { available: true },
+      references: { available: true },
+      strings_names: { available: true },
+      cfg: { available: true },
+    },
     basic_blocks: [
       {
         start: base,
@@ -118,34 +128,118 @@ const observe = (
     },
   );
 
-describe("function comparison normalized identity", () => {
-  it("keeps differing generated names ambiguous and stable names mismatched", () => {
-    const named = (base: "0x1000" | "0x2000", name: string) =>
-      functionDossierSchema.parse({
-        ...dossier("return 0;", base),
-        procedure: {
-          ...procedure(base, name),
-          signature: "int helper(void)",
-          locals: [],
-        },
-      });
-    const generated = compareFunctions(
-      observe("1", named("0x1000", "sub_1000")),
-      observe("2", named("0x2000", "sub_2000")),
-    );
-    expect(generated.function_match.status).toBe("ambiguous");
-    expect(generated.status).toBe("unknown");
-    expect(
-      generated.dimensions.find(({ dimension }) => dimension === "identity"),
-    ).toMatchObject({ status: "unknown" });
+const rejectsMalformedFacetAvailability = (): void => {
+  expect(
+    functionDossierSchema.safeParse({
+      ...dossier("return 0;", "0x1000"),
+      facet_availability: { cfg: { available: false, reason: "" } },
+    }).success,
+  ).toBe(false);
+  expect(
+    functionDossierSchema.safeParse({
+      ...dossier("return 0;", "0x1000"),
+      facet_availability: { cfg: undefined },
+    }).success,
+  ).toBe(false);
+};
 
-    const stable = compareFunctions(
-      observe("3", named("0x1000", "firstFunction")),
-      observe("4", named("0x2000", "secondFunction")),
+const keepsGeneratedNamesAmbiguous = (): void => {
+  const named = (base: "0x1000" | "0x2000", name: string) =>
+    functionDossierSchema.parse({
+      ...dossier("return 0;", base),
+      procedure: {
+        ...procedure(base, name),
+        signature: "int helper(void)",
+        locals: [],
+      },
+    });
+  const generated = compareFunctions(
+    observe("1", named("0x1000", "sub_1000")),
+    observe("2", named("0x2000", "sub_2000")),
+  );
+  expect(generated.function_match.status).toBe("ambiguous");
+  expect(generated.status).toBe("unknown");
+  expect(
+    generated.dimensions.find(({ dimension }) => dimension === "identity"),
+  ).toMatchObject({ status: "unknown" });
+
+  const stable = compareFunctions(
+    observe("3", named("0x1000", "firstFunction")),
+    observe("4", named("0x2000", "secondFunction")),
+  );
+  expect(stable.function_match.status).toBe("mismatched");
+  expect(stable.status).toBe("changed");
+};
+
+describe("function comparison normalized identity", () => {
+  it("retains unresolved call details alongside missing facet coverage", () => {
+    const value: Record<string, unknown> = {
+      ...dossier("return 0;", "0x1000"),
+      unresolved_calls: [
+        { address: "0x1010", reason: "Unknown indirect target" },
+      ],
+    };
+    delete value.facet_availability;
+    const legacy = observe("a", functionDossierSchema.parse(value), "ida");
+    const calls = compareFunctions(legacy, legacy).dimensions.find(
+      ({ dimension }) => dimension === "calls",
     );
-    expect(stable.function_match.status).toBe("mismatched");
-    expect(stable.status).toBe("changed");
+    expect(calls).toMatchObject({
+      status: "unknown",
+      limitations: expect.arrayContaining([
+        "Left: Unresolved call at 0x1010: Unknown indirect target",
+        "Left: callers: Provider did not declare coverage for this empty facet.",
+      ]),
+    });
   });
+  it("keeps empty legacy facets without coverage declarations unknown", () => {
+    const value: Record<string, unknown> = {
+      ...dossier("return 0;", "0x1000"),
+      basic_blocks: [],
+    };
+    delete value.facet_availability;
+    const legacy = observe("a", functionDossierSchema.parse(value), "ida");
+    const result = compareFunctions(legacy, legacy);
+    for (const dimension of [
+      "comments",
+      "references",
+      "strings_names",
+      "cfg",
+      "calls",
+    ]) {
+      expect(
+        result.dimensions.find((item) => item.dimension === dimension),
+      ).toMatchObject({ status: "unknown" });
+    }
+  });
+  it("keeps unavailable facets unknown even when one side supplies values", () => {
+    const left = observe(
+      "a",
+      functionDossierSchema.parse({
+        ...dossier("return 0;", "0x1000"),
+        facet_availability: {
+          comments: { available: false, reason: "Not collected" },
+        },
+        comments: [
+          { address: "0x1000", kind: "comment", text: "partial record" },
+        ],
+      }),
+    );
+    const right = observe("b", dossier("return 0;", "0x2000"));
+    expect(
+      compareFunctions(left, right).dimensions.find(
+        ({ dimension }) => dimension === "comments",
+      ),
+    ).toMatchObject({ status: "unknown", left_count: null, right_count: null });
+  });
+  it(
+    "rejects malformed facet availability instead of treating it as absence",
+    rejectsMalformedFacetAvailability,
+  );
+  it(
+    "keeps differing generated names ambiguous and stable names mismatched",
+    keepsGeneratedNamesAmbiguous,
+  );
 
   it.each(["sub_deallocate", "sub_deadbeef_handler", "fcn.dispatch"])(
     "recognizes the explicit symbol %s without a generated-name prefix false positive",
@@ -531,6 +625,40 @@ describe("function comparison CFG address normalization", () => {
 });
 
 describe("function comparison unresolved text", () => {
+  it("qualifies exact text changes caused by relocated provider labels", () => {
+    const left = observe(
+      "2",
+      functionDossierSchema.parse({
+        ...dossier("return FUN_00001010(DAT_00001020) % 3;", "0x1000"),
+        assembly: ["0x1000 call FUN_00001010", "0x1004 ret"],
+      }),
+    );
+    const right = observe(
+      "3",
+      functionDossierSchema.parse({
+        ...dossier("return FUN_00002010(DAT_00002020) % 3;", "0x2000"),
+        assembly: ["0x2000 call FUN_00002010", "0x2004 ret"],
+      }),
+    );
+    const comparison = compareFunctions(left, right);
+    for (const name of ["pseudocode", "assembly"]) {
+      const dimension = comparison.dimensions.find(
+        ({ dimension }) => dimension === name,
+      );
+      expect(dimension).toMatchObject({
+        status: "changed",
+        limitations: expect.arrayContaining([
+          expect.stringContaining(
+            "layout-only differences do not establish a behavior change",
+          ),
+        ]),
+      });
+    }
+    expect(
+      comparison.dimensions.find(({ dimension }) => dimension === "cfg"),
+    ).toMatchObject({ status: "unchanged" });
+  });
+
   it("counts Unicode text consistently for unresolved provider comparisons", () => {
     const left = observe("b", dossier("return '😀';", "0x1000"), "provider-a");
     const right = observe("c", dossier("return '😀';", "0x2000"), "provider-b");
@@ -792,6 +920,31 @@ describe("function comparison Swift string literals", () => {
 });
 
 describe("function comparison partial Swift literal coverage", () => {
+  it("keeps literal comparisons unknown at unresolved jump candidates", () => {
+    const unresolved = functionDossierSchema.parse({
+      ...withLiterals("0x2000", []),
+      swift_string_literal_omissions: [
+        {
+          source_address: "0x2004",
+          representation: "small",
+          address: null,
+          byte_length: 4,
+          reason: "unresolved_jump",
+          registers: ["x0", "x1"],
+          words: ["0x732f4220", "0xe400000000000000"],
+        },
+      ],
+    });
+    expect(
+      stringsDimension(
+        "8",
+        withLiterals("0x1000", ["SleepDisabled"]),
+        "9",
+        unresolved,
+      ),
+    ).toMatchObject({ status: "unknown" });
+  });
+
   it("does not equate a partial literal record with a complete one", () => {
     const partial = functionDossierSchema.parse({
       ...withLiterals("0x2000", ["SleepDisabled"]),
@@ -836,7 +989,9 @@ describe("function comparison partial Swift literal coverage", () => {
       stringsDimension("d", withLiterals("0x1000", []), "e", partial),
     ).toMatchObject({ status: "changed" });
   });
+});
 
+describe("function comparison partial Swift literal omission interpretation", () => {
   it("does not interpret an unexamined path as a missing literal at a retained site", () => {
     const partial = functionDossierSchema.parse({
       ...withLiterals("0x2000", ["A"]),
@@ -999,3 +1154,51 @@ const expectFunctionDimensionAlgebra = (
     }).success,
   ).toBe(false);
 };
+
+it.each([
+  { match: "mismatched", changedDimensions: false, expected: "changed" },
+  { match: "ambiguous", changedDimensions: false, expected: "unknown" },
+  { match: "ambiguous", changedDimensions: true, expected: "unknown" },
+] as const)(
+  "validates $match match precedence with changed dimensions=$changedDimensions",
+  ({ match, changedDimensions, expected }) => {
+    const result = compareFunctions(
+      FUNCTION_COMPARISON_EXAMPLE.left,
+      changedDimensions
+        ? FUNCTION_COMPARISON_EXAMPLE.right
+        : FUNCTION_COMPARISON_EXAMPLE.left,
+    );
+    const candidate = {
+      ...result,
+      function_match: {
+        status: match,
+        method: "explicit",
+        left_name: "main",
+        right_name: "other",
+      },
+    };
+    expect(
+      functionComparisonResultSchema.safeParse({
+        ...candidate,
+        status: expected,
+      }).success,
+    ).toBe(true);
+    for (const status of ["unchanged", "changed", "unknown"] as const) {
+      if (status === expected) continue;
+      const parsed = functionComparisonResultSchema.safeParse({
+        ...candidate,
+        status,
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success)
+        expect(parsed.error.issues).toMatchObject([
+          {
+            path: ["status"],
+            code: "custom",
+            message:
+              "Function comparison status contradicts its dimensions or function match.",
+          },
+        ]);
+    }
+  },
+);

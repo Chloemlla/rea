@@ -15,6 +15,7 @@ const observe = (
     readonly evidenceLimitations?: readonly string[];
     readonly dossierLimitations?: readonly string[];
     readonly relationshipCoverage?: RelationshipCoverage;
+    readonly calleeUnavailable?: string;
   } = {},
 ): Evidence => {
   const value = {
@@ -52,6 +53,13 @@ const observe = (
     native_value_flow: null,
     basic_blocks: [],
     limitations: [...(options.dossierLimitations ?? [])],
+    ...(options.calleeUnavailable === undefined
+      ? {}
+      : {
+          facet_availability: {
+            callees: { available: false, reason: options.calleeUnavailable },
+          },
+        }),
   } satisfies JsonValue;
   return createEvidence(
     { path: "/tmp/a", sha256: "a".repeat(64), format: "mach-o" },
@@ -329,6 +337,42 @@ describe("call path topology and capacity", () => {
   });
 });
 
+describe("directional call relationship coverage", () => {
+  it.each([
+    {
+      directions: ["callers"] as ["callers"],
+      status: "not_found",
+      exhaustive: true,
+    },
+    {
+      directions: ["callees"] as ["callees"],
+      status: "unknown",
+      exhaustive: false,
+    },
+    {
+      directions: ["callers", "callees"] as ["callers", "callees"],
+      status: "unknown",
+      exhaustive: false,
+    },
+  ])(
+    "uses $directions coverage for the forward search",
+    ({ directions, status, exhaustive }) => {
+      const limitation = "The inventory omitted a reference.";
+      const relationshipCoverage: RelationshipCoverage = {
+        status: "partial",
+        limitations: [limitation],
+        limited_directions: directions,
+      };
+      const result = run([
+        observe("0x1000", ["0x2000"], "rea-workflow", { relationshipCoverage }),
+        observe("0x2000", [], "rea-workflow", { relationshipCoverage }),
+      ]);
+      expect(result).toMatchObject({ status, search_scope: { exhaustive } });
+      expect(result.limitations).toContain(limitation);
+    },
+  );
+});
+
 describe("explicit call relationship coverage", () => {
   it("accumulates 150,000 partial reasons without argument-stack exhaustion", () => {
     const result = run([
@@ -540,4 +584,14 @@ describe("call path evidence admission", () => {
       /supplied for start 0x1000/u,
     );
   });
+});
+
+it("keeps an absent path unknown when only callee facet availability is declared", () => {
+  const result = run([
+    observe("0x1000", [], "rea-workflow", {
+      calleeUnavailable: "Graph callees unavailable",
+    }),
+  ]);
+  expect(result.status).toBe("unknown");
+  expect(result.limitations).toContain("Graph callees unavailable");
 });

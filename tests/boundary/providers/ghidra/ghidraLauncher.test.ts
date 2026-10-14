@@ -486,7 +486,9 @@ describe("Ghidra Windows launcher", () => {
       }),
     ).toThrow(/metacharacters/u);
   });
+});
 
+describe("Ghidra Windows launcher runtime", () => {
   it.skipIf(process.platform !== "win32").each([
     {
       properties:
@@ -522,6 +524,13 @@ describe("Ghidra Windows launcher", () => {
         ),
         javaHome: "C:\\Java\\jdk-21",
         bridgeScriptPath: join(parent, "ReaGhidraBridge.java"),
+        // The preflight validates the inspected JVM's LaunchSupport output;
+        // these fixtures assert batch-spawn behavior without a working JDK.
+        javaLaunch: async () => ({
+          command: "C:\\Java\\jdk-21\\bin\\java.exe",
+          arguments: [],
+          environment: {},
+        }),
         spawnProcess,
       });
       const launched = await launcher.launch({
@@ -567,6 +576,13 @@ describe("Ghidra Windows launcher", () => {
         platform: "win32",
         javaHome,
         bridgeScriptPath: "/package/bridge/ReaGhidraBridge.java",
+        // The preflight validates the inspected JVM's LaunchSupport output;
+        // this fixture captures the batch launcher without a working JDK.
+        javaLaunch: async () => ({
+          command: `${javaHome}\\bin\\java.exe`,
+          arguments: [],
+          environment: {},
+        }),
       });
       const launched = await launcher.launch({
         runtimeRoot,
