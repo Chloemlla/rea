@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, open, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, open, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
@@ -10,7 +9,6 @@ const injected = vi.hoisted(() => ({
   failClose: false,
   opens: 0,
   handle: undefined as Awaited<ReturnType<typeof open>> | undefined,
-  nativeClose: undefined as (() => Promise<void>) | undefined,
 }));
 
 vi.mock("node:fs/promises", async (importOriginal) => {
@@ -23,7 +21,6 @@ vi.mock("node:fs/promises", async (importOriginal) => {
       injected.opens += 1;
       injected.handle = handle;
       const nativeClose = handle.close.bind(handle);
-      injected.nativeClose = nativeClose;
       handle.close = async () => {
         if (injected.failClose)
           throw new Error("controlled file close failure");
@@ -34,14 +31,15 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   };
 });
 
-import { createTestBinarySession } from "../../fixtures/binarySession.js";
-import { parseMcpToolError } from "../../fixtures/mcpToolError.js";
-import type { AnalysisClient } from "../../../src/application/AnalysisProvider.js";
-import { observed } from "../../fixtures/analysisExecution.js";
-import { createServer } from "../../../src/server/createServer.js";
-import { silentLogger } from "../../../src/logger.js";
-import { ToolResultDelivery } from "../../../src/server/toolResult.js";
-import { ok } from "../../../src/domain/result.js";
+import { createTestTempDirectory } from "../fixtures/temporaryDirectory.js";
+import { createTestBinarySession } from "../fixtures/binarySession.js";
+import { parseMcpToolError } from "../fixtures/mcpToolError.js";
+import type { AnalysisClient } from "../../src/application/AnalysisProvider.js";
+import { observed } from "../fixtures/analysisExecution.js";
+import { createServer } from "../../src/server/createServer.js";
+import { silentLogger } from "../../src/logger.js";
+import { ToolResultDelivery } from "../../src/server/toolResult.js";
+import { ok } from "../../src/domain/result.js";
 
 const connectSession = async () => {
   const session = createTestBinarySession(
@@ -64,7 +62,7 @@ const connectSession = async () => {
 };
 
 it("retains and retries the exact snapshot file handle through public MCP capture", async () => {
-  const root = await mkdtemp(join(tmpdir(), "rea-process-snapshot-cleanup-"));
+  const root = await createTestTempDirectory("rea-process-snapshot-cleanup-");
   const observedRoot = join(root, "observed");
   const filePath = join(observedRoot, "input.txt");
   await mkdir(observedRoot);
@@ -89,7 +87,7 @@ it("retains and retries the exact snapshot file handle through public MCP captur
 
   try {
     const failed = parseMcpToolError(await capture());
-    expect(injected.opens).toBe(1);
+    expect(injected.opens, JSON.stringify(failed)).toBe(1);
     expect(injected.handle?.fd).toBeGreaterThanOrEqual(0);
     expect(failed.error).toMatchObject({
       code: "cleanup_incomplete",
@@ -122,7 +120,7 @@ it("retains and retries the exact snapshot file handle through public MCP captur
     expect(retryBlocked.error.details).toMatchObject({
       resources: [injected.path],
     });
-    expect(injected.opens).toBe(1);
+    expect(injected.opens, JSON.stringify(retryBlocked)).toBe(1);
     expect(injected.handle?.fd).toBeGreaterThanOrEqual(0);
 
     injected.failClose = false;
@@ -172,6 +170,5 @@ it("retains and retries the exact snapshot file handle through public MCP captur
     await rm(root, { recursive: true, force: true });
     injected.path = "";
     injected.handle = undefined;
-    injected.nativeClose = undefined;
   }
 });
