@@ -200,8 +200,19 @@ rather than interpreted according to section order.
 
 ### Selected member inspection
 
-When whole-assembly member decoding reaches the representation budget, select
-known declaring types before their signatures and CIL bodies are decoded:
+Member inspection admits type names, tokens, list ranges/counts, nesting facts,
+module identity and their output representation before decoding members. If
+later decoding or projection reaches the 64 MiB representation budget, the
+result retains this type inventory with `coverage.state: "partial"` and the
+original `resource-limit` coordinate. It does not return partially admitted
+member collections: empty fields, methods, references and edges are unexamined,
+not proof of absence; exported types, user strings and signature-resolution
+attestation remain null. Summary and retained pages keep this partial coverage.
+The capacity limit is unchanged. If metadata or the type inventory itself cannot
+be admitted, the result remains unavailable.
+
+Use the returned `types[].full_name` values to select declaring types before
+their signatures and CIL bodies are decoded:
 
 ```bash
 rea inspect-managed-members /absolute/path/Assembly.dll --type Example.Parser
@@ -232,6 +243,14 @@ Coverage describes the selected members. Comparisons leave members outside the
 opposite observation's selection unknown, and application graphs report their
 selected scope as partial. Neither makes an absence claim about the whole
 assembly. Older member Evidence without `selection` remains readable.
+
+For MCP callers, request `detail: "summary"` and page the `types` collection
+using the returned parent Evidence ID. Select one or more returned full names
+in a subsequent `inspect_managed_members` request. Selection is a recovery path,
+not a guarantee: a single type or the assembly-wide member references can still
+exhaust the representation budget. A successful command exit means the Evidence
+was returned; inspect `coverage.state` and `coverage.issues` before treating any
+collection as complete.
 
 ### User strings
 
@@ -500,6 +519,19 @@ CLI `#GUID` heap values retain their exact 16-byte GUID text. REA does not impos
 RFC 4122 UUID version or variant bits on MVID, EncId, or EncBaseId because
 ECMA-335 metadata does not require those bit patterns. Tokens and RVAs are
 build-local coordinates, not durable cross-build identities or native addresses.
+Field and method signatures validate embedded TypeDefOrRefOrSpec operands
+against the artifact's metadata tables. An invalid operand leaves the member
+name and raw signature digest available while marking that signature malformed
+and coverage partial.
+A fat method header's nonzero LocalVarSigTok must name an existing StandAloneSig
+row whose blob is a structurally valid LocalVarSig. REA validates its local
+types and exact blob coverage but does not project their identities. An invalid
+token or malformed signature leaves decoded CIL anchors intact but marks the
+body malformed and coverage partial. Unsupported local type encodings retain
+the readable body with partial coverage. Zero continues to mean no locals
+signature. Comparison detects whether a locals declaration is present, but raw
+table tokens are not cross-build identities and local type contents are not
+compared.
 
 ## Decoded-CIL fingerprint
 
@@ -524,6 +556,10 @@ Tuple operands use these exact projections:
 - `switch`: the case count as a decimal string, without target offsets;
 - signed integer and variable operands: decimal strings; floating-point
   operands: JavaScript's `String` representation of the decoded IEEE value.
+
+For `ldtoken` MemberRef operands, `operand_kind` follows the parsed member
+signature (`field` or `method`); if that signature does not establish the kind,
+the anchor keeps the generic `token` classification.
 
 Opcode names retain short/long forms and prefix opcodes. This makes the value a
 reproducible decoded-tuple fingerprint, not a canonical semantic CIL identity:
@@ -693,6 +729,10 @@ Managed member comparisons report a `metadata` dimension when an observed
 MethodDef flags or implementation flags value differs, including accessibility
 or synchronization changes. Observed method-body `init_locals` and `max_stack`
 differences also contribute to `metadata`, even when CIL decoding is incomplete.
+For complete bodies, presence or absence of a locals signature also contributes;
+the locals table token is build-local and is not compared. Local type contents
+are not currently compared, so this facet does not establish equivalent locals
+declarations.
 An unavailable header value keeps body coverage unknown rather than establishing
 equality or a difference. These comparisons are separate from the CIL/signature
 matching tiers: identical instructions do not establish unchanged method metadata.
