@@ -343,6 +343,27 @@ Hopper regex mode.
 
 ## Bounded static traces
 
+Hopper caller queries, incoming procedure references and function dossiers
+reconcile reported reverse relationships with forward call observations. Each
+standalone query or composed workflow scans the current document in pages of at
+most 64 procedures and retains at most 4 MiB of encoded scan results. A composed
+workflow reuses its own index and clears it when the workflow finishes. The
+default cooperative scan budget is
+2,000 ms; set `REA_HOPPER_CALLER_SCAN_BUDGET_MS` to a positive integer number of
+milliseconds before starting REA to change it. The default limits additional
+work on the serial Hopper bridge; larger documents may need a higher setting.
+Results report the examined procedure count and any budget interruption.
+An individual page, native caller list, and target instruction list each have
+a 512 KiB encoded allowance. Hitting one reports the incomplete observation.
+Cancellation is checked between pages, but cannot interrupt a Hopper API call
+already executing; Hopper's native API itself materializes its reference arrays
+before REA can bound their copies. Hopper exposes no document revision token, so scans are not
+reused across workflows and coverage and consistency during a live scan remain
+unknown even when every procedure was examined.
+Hopper observations are re-observed rather than replayed from snapshots because
+the provider has no document revision token. Safe observations may still be
+retained as Evidence.
+
 `trace_native_ui_action` / `rea trace-native-ui-action <target> <seed>` accepts
 one authored selector/object ID, native symbol or exact function address. It
 joins UI wiring to uniquely matched class/selector implementations and follows
@@ -491,8 +512,10 @@ output-budget omissions remain omissions.
 
 Source input is limited to 64 MiB. Binary and direct XML decoding reserve an
 estimated 64 MiB decode budget before parsing; this is not a hard process-memory
-bound. JSON decode memory has not been measured and has no equivalent decode
-estimate. A refused input reports non-retryable `resource_constraint` with
+bound. The XML estimate charges every element and every text, comment or CDATA
+node of the decoder's DOM at a measured upper bound, so a plist made of many
+small elements reaches it at a few MiB of source. JSON decode memory has not
+been measured and has no equivalent decode estimate. A refused input reports non-retryable `resource_constraint` with
 `reported_limits.maximum_input_bytes` or `maximum_decoded_bytes` as applicable.
 Ordinary direct-source decoding has a ceiling of 998 source nesting levels,
 derived from the existing 1000-level JSON result capacity by reserving one level
@@ -638,6 +661,9 @@ complete observation.
   undecodable filenames and skipped symlinks, as partial coverage. Known
   executable roots remain available; unexamined names and symlink targets
   cannot establish an empty root set or the absence of other roots.
+  A dependency symlink whose target is not valid UTF-8 is undetermined, with
+  its stored target bytes in the limitation and partial coverage; a selected
+  root crossing such a symlink is refused with the same bytes in its diagnostic.
 - `inspect_asset_catalog` / `rea inspect-asset-catalog <app>` reads compiled
   `Assets.car` metadata through macOS `assetutil --info`. Catalog digests, raw
   rendition fields, pagination and exact UI resource-name matches are returned.
