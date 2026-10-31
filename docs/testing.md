@@ -382,6 +382,38 @@ matching real-provider lane.
 | Client configuration or schema conversion | [Native client lane](client-verification.md)                  | Distinguish loopback models from live services              |
 | Agent investigation quality               | [Agent evaluation](#agent-evaluation-and-conformance-records) | Review transcript and scenario-specific evidence            |
 
+### Provider-backed workflow verification
+
+For a new or changed provider-backed tool, select tests from the analyst's
+question and the facts the contract claims, not from an upstream command list.
+Use the existing workflow as a baseline and identify what the proposed tool
+adds. Choose the relevant cases below; do not require every provider or a
+Cartesian matrix when it would not change the claim.
+
+When auditing existing tools, compare selected analyst workflows with the cases
+their existing tests and real-provider lanes actually exercise. Run relevant
+public workflows and focused checks; report untested scenarios rather than
+inferring that a green test proves them or that no prior testing occurred. A fix
+should add a regression for the demonstrated failure at its owning boundary and
+affected consumer.
+
+- Use a controlled target with independently known facts and a meaningful
+  counterexample. Compare native provider output with the target or a
+  format-aware oracle; a provider label, a mock, or another REA projection is
+  not independent proof of the underlying fact.
+- Exercise the affected public CLI/MCP workflow, including handoffs between
+  calls. Assert the requested result, caller-selected inputs, source identity,
+  evidence and coverage. Check that unavailable, partial and empty outcomes
+  retain their different meanings across the producing and consuming boundaries.
+- Where relevant, continue after a mixed success, failed request, cancellation
+  or close/reopen. Verify the next supported recovery and preservation of prior
+  results and resource ownership. Use the applicable lifecycle regressions below.
+- Record the provider version, host, fixture, actual entrypoint, controlled
+  faults and skipped or unavailable coverage. A simulated provider tests the
+  integration boundary; a scripted sequence tests that sequence, not an agent's
+  ability to discover it. Run the matching real-provider and agent lanes when
+  their respective claims require them.
+
 ## Test design and pruning
 
 Prefer real public CLI/MCP workflows, then production-boundary integration,
@@ -857,9 +889,10 @@ bridges, analysis-efficiency inputs, or the Python test runner select a separate
 required Python job. That job installs locked dependencies and prepares the
 compiled runtime before the suite, because analysis-efficiency checks import
 built process modules. Bridge tests are discovered from the source tree. The
-mitmproxy, native, and pwndbg families must each keep a test module, and a
-newly added failing test fails the job. Portable test shards and documentation
-checks remain independent of static results, so they can still provide
+mitmproxy, native, and pwndbg families must each contain a test module and
+execute at least one non-skipped case or subtest. A parent case with only skipped
+subtests does not satisfy this requirement. A newly added failing test fails the job.
+Portable test shards and documentation checks remain independent of static results, so they can still provide
 diagnostic feedback. The required gate rejects skipped selected lanes when
 static checks fail; on the full tier it also requires the deep static job.
 Passing revisions retain all selected coverage. This ordering reduces peak
@@ -1028,7 +1061,7 @@ prove behavior on the verified Ghidra 12.1.4 and JDK 21 build.
 | `npm run verify:ghidra`                    | Linux x64/arm64 ELF or macOS x64/arm64 Mach-O                                                                    | Host C compiler, Ghidra 12.1.4, and full JDK 21                             |
 | `npm run verify:ghidra:seeds`              | POSIX; raw x86 fixture; seed ordering, BSS labels, analyzer readback, not-applicable and unknown analyzer names  | Ghidra 12.1.4 and full JDK 21                                               |
 | `npm run verify:ghidra:swift`              | macOS x64/arm64 Mach-O                                                                                           | Host Swift compiler, Ghidra 12.1.4, and full JDK 21                         |
-| `npm run verify:ghidra:riscv`              | Linux/macOS x64/arm64 host; source-owned RV32/RV64 ELF through CLI and MCP                                       | RISC-V Clang, LLD, LLVM readelf, Ghidra 12.1.4, and full JDK 21             |
+| `npm run verify:ghidra:riscv`              | Linux/macOS x64/arm64 host; source-owned RV32/RV64 double-float and RV32 ilp32 ELF through CLI and MCP           | RISC-V Clang, LLD, LLVM readelf and objdump, Ghidra 12.1.4, and full JDK 21 |
 | `npm run verify:ghidra:switch`             | Linux x64 ELF; GCC/Clang optimized and stripped switch fixtures                                                  | GCC, Clang, GNU nm/objdump/strip, Ghidra 12.1.4, and full JDK 21            |
 | `npm run verify:ghidra:aarch64-jump-table` | Any supported Ghidra host; AArch64 ELF; signed/unsigned byte/halfword tables; host ARM64 Mach-O                  | Clang with AArch64 target support, Ghidra 12.1.4, and full JDK 21           |
 | `npm run verify:ghidra:cross-format`       | Any supported Ghidra host; also analyzes AArch64 ELF, x86-64 PE, and x86-64 Mach-O                               | `clang`, LLD, and `lld-link` in addition to host-lane prerequisites         |
@@ -1437,6 +1470,11 @@ cached byte spans and a Ghidra comparison. See the [Linux report](https://github
 for measured scope and limitations. Windows, PE and universal Mach-O remain
 unverified by this lane.
 
+Kuna 1.986 passed the fixture and a separate small, source-owned Mach-O with
+symbols and stripped on macOS arm64, including the Ghidra comparison and owned
+cleanup. Linux and other hosts have not been verified with 1.986; this check is
+not a repeat of the larger 1.833 matrix.
+
 ## DOS Ghidra analysis
 
 `npm run verify:ghidra:dos` requires the supported Ghidra and JDK installation
@@ -1577,9 +1615,10 @@ initial proposal measures only leaf producer-test omissions; it does not promise
 the savings of a broader affected-test planner.
 
 `scripts/ci/plan.mjs` selects lanes using the ownership table in
-`scripts/ci/scopes.mjs`. Provider implementation changes run their real-provider
-verifiers and the Linux x64 installed-package/Inspector baseline. The `apple`
-scope owns the Apple artifact lane; the `package` scope owns the multi-host
+`scripts/ci/scopes.mjs`. Each lane record owns its path and test selection
+rules and required fast/full jobs; workflow contract tests verify the mapped jobs.
+Provider implementation changes run their real-provider verifiers and the Linux
+x64 installed-package/Inspector baseline. The `apple` scope owns the Apple artifact lane; the `package` scope owns the multi-host
 package matrix and the Windows curated lane, including Windows native controls,
 Inspector, setup, configuration and packaging entrypoints. Runtime sources under
 `src/` or `bridge/` without an owner, and the authored skill, run the Linux suite
@@ -1598,16 +1637,22 @@ workflows run static checks and the Linux suite. Website changes run website
 checks. Provider workflow changes validate the workflow and run that provider's
 verifier. Changes under `bridge/ghidra/` also select the `ghidra_bridge` lane,
 which compiles the packaged bridge sources against the pinned Ghidra 12.1.4
-jars with `npm run verify:ghidra:bridge-sources`. It never launches Ghidra or
-imports a target, so a missing import fails the PR instead of every Ghidra
-session. The launcher, compiler and package checks share named required source
+jars with `npm run verify:ghidra:bridge-sources`. That compile step never
+launches Ghidra or imports a target, so a missing import fails the PR instead
+of every Ghidra session. The launcher, compiler and package checks share named required source
 roles. The manifest must match the complete Java cohort, so deleting a helper
 or adding an unregistered dependency cannot silently change the shipped set.
 The preflight reuses the provider's Java Properties parser with the pinned Node
 toolchain's native type stripping, without an npm install or runtime build.
 The shared release policy owns the verified version and JDK major. CI checks
 the archive pin before downloading and verifies the extracted SDK version;
-changes to these source owners also select the compile lane.
+changes to these source owners also select the compile lane. After compiling,
+the lane launches headless Ghidra on source-owned instruction bytes with
+`-noanalysis`. The ARM/Thumb probe sets each instruction's mode explicitly and
+checks the bridge's decoder-context readback. The decode probes check that
+`ARM:LE:32:Cortex`, `ARM:LE:32:v8-m` and `Xtensa:LE:32:default` decode their
+bytes from each language's default context. The bytes are never executed, and
+edits to those probe scripts also select the lane.
 Manual-provider/Android workflow changes run workflow validation only.
 The four-version SQLite compatibility matrix has its own `sqlite` scope for
 SQLite implementation, contracts, CLI/MCP registration, fixtures, and shared
@@ -1992,6 +2037,20 @@ and derives malformed images and ESP8266 v1 and v3 images. It checks each
 tool before building and warns when esptool is not the pinned v5.6.0.
 `REA_XTENSA_ESP32_GCC` adds an ESP32 Xtensa build. See
 [ESP images](esp-image.md).
+
+`npm run verify:uf2` needs only a Python that runs esptool, named by
+`REA_ESPTOOL_PYTHON` (default `python3`). It writes inputs at known addresses,
+builds UF2 files with esptool's `merge-bin --format uf2` (v4 `merge_bin`) with
+and without MD5 and with 256-byte payloads, and concatenates two chips'
+outputs. Inspection and extraction through the built CLI must return each input
+at its address under the familyID esptool itself reports. It is not part of CI.
+See [UF2 and DfuSe images](uf2-dfuse.md).
+`npm run verify:esp-flash` needs the same tools and an ESP-IDF checkout
+(`REA_ESP_IDF_PATH`) for `gen_esp32part.py` and `otatool.py`. It builds
+partition tables, assembles dumps with `esptool merge-bin`, writes OTA records
+with otatool through `tests/conformance/esp/flash_file_tool.py`, and compares
+REA's flash facts with `image-info`, the decoded table and
+`otatool read_otadata`. See [ESP flash images](esp-flash-image.md).
 
 ### JavaScript source recovery
 
