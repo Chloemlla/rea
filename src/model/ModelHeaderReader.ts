@@ -3,10 +3,11 @@ import type { FileHandle } from "node:fs/promises";
 import { assertArtifactReadActive } from "../artifacts/ArtifactFileOperation.js";
 import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
 import {
-  ModelFormatFailure,
+  modelCapacityFailure,
   MODEL_HEADER_BYTES,
   rejectModel,
 } from "./ModelFormat.js";
+import { invariantViolation } from "../domain/internalInvariant.js";
 
 /** Sequential prefix reader. Read-ahead is permitted only inside a parser-proven header extent. */
 export class ModelHeaderReader {
@@ -26,7 +27,7 @@ export class ModelHeaderReader {
   /** Safetensors declares JSON bytes separately from its fixed length prefix. */
   excludeSafetensorsLengthPrefix(): void {
     if (this.position !== 8)
-      throw new TypeError(
+      throw invariantViolation(
         "Safetensors header budget must follow its eight-byte length prefix",
       );
     this.#headerPrefixBytes = 8;
@@ -58,10 +59,9 @@ export class ModelHeaderReader {
     if (!Number.isSafeInteger(end) || end < 0 || end > this.size)
       rejectModel("Declared header extent is outside the file");
     if (end - this.#headerPrefixBytes > MODEL_HEADER_BYTES)
-      throw new ModelFormatFailure(
-        "capacity",
-        "Model header exceeds 100,000,000 bytes. This release has no runtime override.",
+      throw modelCapacityFailure(
         "header-bytes",
+        "Model header exceeds 100,000,000 bytes. This release has no runtime override.",
       );
   }
 

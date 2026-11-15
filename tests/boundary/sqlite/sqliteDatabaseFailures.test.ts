@@ -4,6 +4,7 @@ import { OwnedCommandFailure } from "../../../src/process/OwnedCommand.js";
 import { projectAnalysisError } from "../../../src/domain/analysisErrorProjection.js";
 import { sqliteDatabaseFailure } from "../../../src/sqlite/SqliteDatabaseFailures.js";
 import { SQLITE_DATABASE_LIMITS } from "../../../src/sqlite/SqliteDatabaseLimits.js";
+import { releaseOwnedCleanup } from "../../support/cleanupRelease.js";
 
 it.each([null, "owned stop unconfirmed"])(
   "preserves a selected worker deadline with cleanup=%s",
@@ -61,7 +62,7 @@ it.each([null, "owned stop unconfirmed"])(
         _tag: "AnalysisTimeoutError",
         timeoutMs: 1234,
       });
-      failure.resolveCleanup();
+      releaseOwnedCleanup(failure);
       const resolved = projectAnalysisError(failure);
       expect(resolved).toMatchObject({
         code: "provider_timeout",
@@ -120,6 +121,15 @@ it.each(["/selected.db", "./Database files/another.db"])(
       },
       exitCode: null,
       signal: "SIGABRT",
+      runtimeExhaustion: {
+        runtime: "v8",
+        area: "heap",
+        stream: "stderr",
+        line: stderr.trim(),
+        lineComplete: true,
+        truncated: false,
+        invalidUtf8: false,
+      },
     });
     const failure = sqliteDatabaseFailure(cause, path, "worker");
     expect(failure.cause).toBe(cause);
@@ -129,7 +139,17 @@ it.each(["/selected.db", "./Database files/another.db"])(
         operation: "inspect_sqlite_database",
         resource: "memory",
         reported_limits: { javascript_heap_bytes: 256 * 1024 * 1024 },
-        diagnostics: { selected_path: path },
+        diagnostics: {
+          selected_path: path,
+          // The runtime's report survives even when retention dropped it.
+          runtime_exhaustion_report: {
+            runtime: "v8",
+            area: "heap",
+            stream: "stderr",
+            line: stderr.trim(),
+            line_complete: true,
+          },
+        },
         captured_output: { stderr },
       },
     });

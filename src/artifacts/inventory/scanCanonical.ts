@@ -145,6 +145,7 @@ const scanCanonical = async (
       options.asarHeaderAdmission,
       selectedPath,
       options.readerLimits,
+      options.integrity,
     );
   } catch (cause: unknown) {
     readerCreationFailure = { cause };
@@ -255,7 +256,7 @@ const scanCanonical = async (
                   ),
             cleanup: cause.cleanup,
             cleanupLeases: cause.cleanupLeases,
-            userMessage: cause.userMessage,
+            ...cause.primaryFacts(),
             ...(retained === undefined
               ? {}
               : {

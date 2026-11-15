@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { malformedInput } from "../domain/parseFailure.js";
 import { crc32 } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
@@ -193,6 +194,47 @@ describe("native UI screenshot validation", () => {
     }
   });
 });
+
+it.each(["observe_native_ui", "capture_native_ui_scenario"] as const)(
+  "keeps the rejected capture mode reason and field corrections for %s",
+  async (operation) => {
+    const result = await observeNativeUi(
+      target,
+      operation,
+      {
+        pid: 123,
+        window_id: 456,
+        screenshot: false,
+        accessibility: false,
+        ...(operation === "capture_native_ui_scenario"
+          ? { steps: [{ kind: "wait", milliseconds: 0 }] }
+          : {}),
+      },
+      {
+        environment: {},
+        invoke: async () => {
+          throw new Error("No native helper should run for this refusal");
+        },
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("Expected capture mode refusal");
+    const projected = projectAnalysisError(result.error);
+    expect(projected).toMatchObject({
+      code: "invalid_request",
+      category: "invalid_input",
+      details: {
+        issues: [
+          { path: ["screenshot"], reason: "invalid_value" },
+          { path: ["accessibility"], reason: "invalid_value" },
+        ],
+      },
+    });
+    expect(projected.message).toMatch(/screenshot.*accessibility/iu);
+    expect(projected.remediation.action).toMatch(/screenshot.*accessibility/iu);
+    expect(projected.remediation.action).toMatch(/true/iu);
+  },
+);
 
 describe("native UI capture selection and budgets", () => {
   it("accepts observations and scenarios without compatibility flags", async () => {
@@ -628,7 +670,9 @@ describe("native UI target and cancellation failures", () => {
     const result = await observeNativeUi(target, "observe_native_ui", scope, {
       environment: {},
       invoke: async () => {
-        throw new Error(
+        // The helper runtime's own report of output that is not JSON.
+        throw malformedInput(
+          "native-ui-helper-output",
           "Native helper returned invalid JSON: Unexpected token",
         );
       },
