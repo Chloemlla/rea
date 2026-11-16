@@ -22,7 +22,7 @@ import {
   AnalysisError,
   type AnalysisCleanupObservation,
 } from "../domain/analysisErrorBase.js";
-import { analysisErrorWithCleanupFailure } from "../domain/analysisErrorCleanup.js";
+import { analysisErrorWithCleanupDependencies } from "../domain/analysisErrorCleanup.js";
 import { ProviderCleanupError } from "../domain/providerCleanupError.js";
 import { copyFile, lstat, realpath, rm, rmdir } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
@@ -34,7 +34,7 @@ import {
   hasParentTraversal,
   sameLexicalDirectory,
   withinLexicalDirectory,
-} from "../config/kunaCacheDirectory.js";
+} from "../filesystem/cacheDirectory.js";
 import { defaultDarwinHelperCacheDirectory } from "../process/DarwinHelperCache.js";
 import { linuxHopperReleaseCacheDirectory } from "./LinuxHopperCacheDirectory.js";
 
@@ -64,9 +64,11 @@ import {
   InvalidUtf8FileError,
   readRegularFileText,
   bindRegularFileCleanup,
-} from "./RegularFileRead.js";
-import { ArtifactReaderFailure } from "../artifacts/ArtifactReader.js";
-import { ArtifactResourceScope } from "../artifacts/ArtifactResourceScope.js";
+} from "../process/RegularFileRead.js";
+import {
+  ArtifactReaderFailure,
+  ArtifactResourceScope,
+} from "../resources/index.js";
 import {
   appDataRedirection,
   clientOwnershipEvidencePaths,
@@ -246,11 +248,11 @@ export const runUninstall = async (
   if (failed) {
     if (cleanupFailure !== undefined) {
       if (primaryFailure instanceof AnalysisError)
-        throw analysisErrorWithCleanupFailure(
+        throw analysisErrorWithCleanupDependencies(
           primaryFailure,
           cleanupFailure,
           "uninstall",
-        ).bindCleanupDependencies([primaryFailure, cleanupFailure]);
+        );
       throw new AggregateError(
         [primaryFailure, cleanupFailure],
         "Uninstall failed and its resource cleanup remains incomplete.",
@@ -550,10 +552,8 @@ export const systemUninstallHost = (
     if (upper !== undefined) lowerLayers.push(upper);
     return {
       kind: "entry",
-      entry:
-        effectiveClientConfiguration(lowerLayers)?.servers[
-          PRODUCT_IDENTITY.mcpServerKey
-        ],
+      entry: effectiveClientConfiguration(lowerLayers, undefined, platform)
+        ?.servers[PRODUCT_IDENTITY.mcpServerKey],
     };
   };
   /**
@@ -574,9 +574,11 @@ export const systemUninstallHost = (
     const inlineEntry =
       inline === undefined
         ? undefined
-        : effectiveClientConfiguration([
-            { ...inline.parsed, inlineOrigin: inline.origin },
-          ])?.servers[PRODUCT_IDENTITY.mcpServerKey];
+        : effectiveClientConfiguration(
+            [{ ...inline.parsed, inlineOrigin: inline.origin }],
+            undefined,
+            platform,
+          )?.servers[PRODUCT_IDENTITY.mcpServerKey];
     if (
       inline !== undefined &&
       enabledRegistration(inlineEntry) &&
@@ -820,14 +822,16 @@ export const systemUninstallHost = (
             originalLayers.push(layer);
             remainingLayers.push(layer);
           }
-          const selected =
-            effectiveClientConfiguration(originalLayers)?.servers[
-              PRODUCT_IDENTITY.mcpServerKey
-            ];
-          const remaining =
-            effectiveClientConfiguration(remainingLayers)?.servers[
-              PRODUCT_IDENTITY.mcpServerKey
-            ];
+          const selected = effectiveClientConfiguration(
+            originalLayers,
+            undefined,
+            platform,
+          )?.servers[PRODUCT_IDENTITY.mcpServerKey];
+          const remaining = effectiveClientConfiguration(
+            remainingLayers,
+            undefined,
+            platform,
+          )?.servers[PRODUCT_IDENTITY.mcpServerKey];
           const altersEffectiveRegistration =
             clientRegistrationOwnership(selected, client) === "owned"
               ? remaining !== undefined
@@ -878,6 +882,7 @@ export const systemUninstallHost = (
             client,
             fileSystem,
             resources,
+            platform,
             () => clientWriteBlocker(client),
             preflightOwnedClients.has(client),
           ),
@@ -1212,6 +1217,7 @@ const removeClient = async (
   client: UninstallClient,
   fileSystem: UninstallFileSystem,
   resources: ArtifactResourceScope,
+  platform: NodeJS.Platform,
   writeBlocker?: () => string | undefined,
   preflightOwned = false,
 ): Promise<UninstallItem> => {
@@ -1252,6 +1258,7 @@ const removeClient = async (
   const document = withClientServers(
     parsed,
     remaining,
+    platform,
     removeLegacy ? name : undefined,
   );
   const editedPaths = [

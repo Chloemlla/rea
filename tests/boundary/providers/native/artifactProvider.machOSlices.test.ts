@@ -12,7 +12,7 @@ import {
   machoImage,
 } from "../../../../src/artifacts/apple/MachoImage.fixture.js";
 import { ok } from "../../../../src/domain/result.js";
-import type { NativeCommandRunner } from "../../../../src/native/CommandRunner.js";
+import type { NativeCommandRunner } from "../../../../src/providers/NativeCommandRunner.js";
 
 describe("artifact Mach-O slices", () => {
   it("rejects lipo slice sizes that exceed the observed artifact bytes", async () => {
@@ -232,7 +232,7 @@ describe("artifact Mach-O slice integrity", () => {
   it("fails on a lipo/FAT disagreement under the default policy", async () => {
     await expect(disagreeingLipo("fail")).rejects.toMatchObject({
       reason: "integrity",
-      message: expect.stringContaining("disagrees with the Mach-O FAT table"),
+      integrityCheck: "layout-consistency",
     });
   });
 

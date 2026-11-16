@@ -1,11 +1,17 @@
-import type { PointerFixups } from "./AppleMachoFixups.js";
-import type { MachoLayout } from "./AppleMachoSelection.js";
+import type { PointerFixups } from "../domain/apple/appleMachoFixups.js";
+import type { MachoLayout } from "../domain/apple/appleMachoSelection.js";
 import type { MachoImportBinding } from "../domain/native/objcSwiftMetadata.js";
+import { errorMessage } from "../kernel/errorMessage.js";
 
 export interface ObjcClassImportBindingScan {
   readonly bindings: readonly MachoImportBinding[];
   readonly coverage: {
-    readonly status: "complete" | "partial" | "unsupported" | "not_requested";
+    readonly status:
+      | "complete"
+      | "partial"
+      | "unknown"
+      | "unsupported"
+      | "not_requested";
     readonly reason: string | null;
     readonly examined: number;
     readonly decoded: number;
@@ -25,7 +31,7 @@ export const inspectObjcClassImportBindings = (input: {
   const { bytes, layout, fixups, addresses, addressesComplete, maxRecords } =
     input;
   // A candidate scan that is truncated, or whose completeness was not stated,
-  // keeps its limitation even when no candidate was retained.
+  // reports that limitation even when no candidate was retained.
   if (
     addresses === undefined ||
     (addresses.length === 0 && addressesComplete === true)
@@ -102,9 +108,7 @@ export const inspectObjcClassImportBindings = (input: {
         addend: decoded.addend.toString(10),
       });
     } catch (cause: unknown) {
-      reasons.add(
-        `${requestedAddress}: ${cause instanceof Error ? cause.message : String(cause)}`,
-      );
+      reasons.add(`${requestedAddress}: ${errorMessage(cause)}`);
     }
   }
 
@@ -112,7 +116,14 @@ export const inspectObjcClassImportBindings = (input: {
   return {
     bindings,
     coverage: {
-      status: reason === null ? "complete" : "partial",
+      // Unstated candidate completeness leaves the whole scan's coverage
+      // unknown, even when other gaps are also known.
+      status:
+        addressesComplete === undefined
+          ? "unknown"
+          : reason === null
+            ? "complete"
+            : "partial",
       reason,
       examined: examinedAddresses.size,
       decoded: bindings.length,
