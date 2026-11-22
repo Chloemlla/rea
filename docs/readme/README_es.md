@@ -272,6 +272,10 @@ Informa de vulnerabilidades siguiendo [SECURITY.md](../../SECURITY.md).
 
 Gracias a quienes usan REA, informan de errores, solicitan funciones, prueban compilaciones y contribuyen con correcciones.
 
+<a href="https://rea.tools/es/contributors/">
+  <img src="../../website/public/contributors/avatars.png" alt="Colaboradores de REA" />
+</a>
+
 <a href="https://www.star-history.com/?repos=morluto%2Frea&amp;type=date">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=morluto/rea&amp;type=date&amp;theme=dark&amp;legend=top-left" />

@@ -274,6 +274,10 @@ npx rea-agents@latest setup
 
 REA の利用、バグ報告、機能の要望、ビルドのテスト、修正への貢献に感謝します。
 
+<a href="https://rea.tools/ja/contributors/">
+  <img src="../../website/public/contributors/avatars.png" alt="REA のコントリビューター" />
+</a>
+
 <a href="https://www.star-history.com/?repos=morluto%2Frea&amp;type=date">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=morluto/rea&amp;type=date&amp;theme=dark&amp;legend=top-left" />
