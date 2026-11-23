@@ -1,4 +1,7 @@
-import { ghidraAsciiLiteralCandidate } from "./GhidraLiteralSearch.js";
+import {
+  ghidraAsciiLiteralCandidate,
+  ghidraAsciiLiteralSubstring,
+} from "./GhidraLiteralSearch.js";
 import { HOST_PLATFORM } from "../platform/HostPlatform.js";
 import {
   fileSnapshotPartialObservationSchema,
@@ -42,7 +45,11 @@ import {
   JsonLineBridgeReader,
   type JsonLineBridgeFailure,
 } from "../process/JsonLineBridgeReader.js";
-import { AbortedWait, waitForAbortable } from "../process/AbortablePromise.js";
+import {
+  AbortedWait,
+  waitForAbortable,
+  waitForRetainedResult,
+} from "../process/AbortablePromise.js";
 import { SharedStartupAttempt } from "../process/SharedStartupAttempt.js";
 import { PrivateRuntimeRoot } from "../process/PrivateRuntimeRoot.js";
 import { ProviderStartupDeadline } from "../process/ProviderDeadline.js";
@@ -103,6 +110,7 @@ import {
   readArtifactFileChunks,
 } from "../resources/index.js";
 import { readBoundedFileBytes } from "../process/BoundedFileBytes.js";
+import { readFileHandleRange } from "../filesystem/readFileHandleRange.js";
 import {
   assertRegularFileActive,
   RegularFileChangedError,
@@ -388,10 +396,10 @@ export class GhidraClient {
     attempt: GhidraStartupAttempt,
     signal: AbortSignal | undefined,
   ): Promise<GhidraStartResult> {
-    const signalAborted = (): boolean => signal?.aborted === true;
-    if (signalAborted()) return err(this.#startupWaitCancellation(signal));
-    const waited = await waitForAbortable(attempt.promise, signal);
-    if (waited instanceof AbortedWait || (waited.ok && signalAborted()))
+    if (signal?.aborted === true)
+      return err(this.#startupWaitCancellation(signal));
+    const waited = await waitForRetainedResult(attempt.promise, signal);
+    if (waited instanceof AbortedWait)
       return err(this.#startupWaitCancellation(signal));
     if (waited.ok || waited.error.cleanupFailure !== undefined) return waited;
     return this.start(signal);
@@ -510,12 +518,21 @@ export class GhidraClient {
       typeof parameters.pattern === "string"
         ? parameters.pattern
         : undefined;
+    const asciiCandidate =
+      pattern === undefined ? undefined : ghidraAsciiLiteralCandidate(pattern);
+    const asciiSubstring =
+      pattern !== undefined && asciiCandidate === null
+        ? ghidraAsciiLiteralSubstring(pattern)
+        : null;
     const pending = this.#enqueue(
       operation,
       pattern !== undefined
         ? {
             ...parameters,
-            literal_ascii_candidate: ghidraAsciiLiteralCandidate(pattern),
+            literal_ascii_candidate: asciiCandidate ?? null,
+            ...(asciiSubstring === null
+              ? {}
+              : { literal_ascii_substring: asciiSubstring }),
           }
         : parameters,
       {
@@ -727,12 +744,40 @@ export class GhidraClient {
     );
   }
 
+  /**
+   * Read caller-chosen positional ranges of the private immutable source. A
+   * range past the end returns the bytes that exist. Nothing is retained as a
+   * partial observation, so callers use this only for advisory reads.
+   */
+  readTargetSnapshotRanges<T>(
+    read: (
+      range: (position: number, length: number) => Promise<Uint8Array>,
+      size: number,
+    ) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<Result<T, GhidraSessionError>> {
+    return this.#withTargetSnapshot(
+      (handle, initial) =>
+        read(
+          (position, length) =>
+            readFileHandleRange(handle, position, length, () =>
+              assertRegularFileActive(signal),
+            ),
+          initial.size,
+        ),
+      undefined,
+      signal,
+    );
+  }
+
   async #withTargetSnapshot<T>(
     read: (handle: FileHandle, initial: Stats, path: string) => Promise<T>,
-    observe: (
-      value: T,
-      path: string,
-    ) => FileSnapshotPartialObservation | NativeLoadImagePartialObservation,
+    observe:
+      | ((
+          value: T,
+          path: string,
+        ) => FileSnapshotPartialObservation | NativeLoadImagePartialObservation)
+      | undefined,
     signal?: AbortSignal,
   ): Promise<Result<T, GhidraSessionError>> {
     let completedObservation:
@@ -768,7 +813,7 @@ export class GhidraClient {
               assertRegularFileActive(signal);
               if (!sameRegularFileState(initial, after))
                 throw new RegularFileChangedError(path);
-              completedObservation = observe(value, path);
+              completedObservation = observe?.(value, path);
               return value;
             },
           ),
@@ -887,7 +932,7 @@ export class GhidraClient {
   async #startupFailure(
     primary: GhidraSessionError,
     deadline?: ProviderStartupDeadline,
-  ): Promise<GhidraStartResult> {
+  ): Promise<Result<never, GhidraSessionError>> {
     const finalization = deadline?.finalize();
     await this.#drainOutputBounded(
       finalization?.signal,
@@ -1016,16 +1061,17 @@ export class GhidraClient {
           "admission",
           startupTimeout.error.message,
           startupTimeout.error,
+          { configurationFailure: startupTimeout.error },
         ),
       );
     const deadline = new ProviderStartupDeadline(startupTimeout.value, signal, {
       finalizeMs: OUTPUT_DRAIN_MS,
     });
     try {
-      const result = await this.#startWithin(deadline);
-      return result.ok && deadline.signal.aborted
-        ? await this.#startupInterrupted(deadline)
-        : result;
+      return await deadline.finishStartup(
+        () => this.#startWithin(deadline),
+        () => this.#startupInterrupted(deadline),
+      );
     } catch (cause: unknown) {
       if (cause instanceof GhidraSessionError) return err(cause);
       throw cause;
@@ -1664,7 +1710,7 @@ export class GhidraClient {
 
   async #startupInterrupted(
     deadline: ProviderStartupDeadline,
-  ): Promise<GhidraStartResult> {
+  ): Promise<Result<never, GhidraSessionError>> {
     const failure = this.#interruptionFailure(deadline);
     return this.#startupFailure(failure, deadline);
   }

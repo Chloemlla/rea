@@ -275,7 +275,11 @@ to `tools/list` and an advertised operation instead of repeating the unknown
 name.
 
 `get_call_graph` returns a `graph` keyed by traversal depth and a top-level
-`limitations` array with deduplicated execution caveats. Each node keeps its
+`limitations` array with deduplicated execution caveats. Both `get_call_graph`
+and `trace_call_path` accept optional `max_depth` and `max_nodes` bounds to
+cap traversal work and reply size; when a bound stops expansion, discovery is
+marked partial and the remaining frontier is reported in `limitations` or
+`residual_unknowns`. Each node keeps its
 relationship coverage and read-specific `limitations`, alongside observed
 `calls`. When a provider does not classify its caveats, they remain on that
 node and coverage is `unknown`. An empty call list with partial or unknown
@@ -931,6 +935,9 @@ coverage is unknown. An inventory view selects `nodes`,
 `occurrences`, `edges`, or `integrity_contradictions`, with `offset` and `limit`
 defaulting to 0 and 64. For occurrences, optional `logical_paths` matches exact
 recorded strings: omission selects all available records; `[]` selects none.
+Optional `entry_kinds` and `artifact_kinds` match exact recorded kinds with the
+same omission and `[]` rules, for example `artifact_kinds: ["native-addon"]`;
+all supplied selectors intersect. Unrecognized bytes keep kind `unknown`.
 These selectors do not reopen the artifact or resolve filesystem paths.
 `source_complete` records whether the available inventory passes the complete
 graph checks. Exhausting a page from a partial source does not establish that
