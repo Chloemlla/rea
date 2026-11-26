@@ -104,6 +104,7 @@ The [REA website](https://rea.tools/) has worked examples and product pages.
 
 - [Firmware analysis](guides/firmware/firmware-analysis.md)
 - [Android OTA update payloads](guides/firmware/android-ota-payload.md)
+- [Android sparse images](guides/firmware/android-sparse-image.md)
 - [Flattened devicetree inspection](devicetree.md)
 - [ESP flash images](esp-flash-image.md)
 - [ESP images](esp-image.md)
@@ -132,6 +133,7 @@ The [REA website](https://rea.tools/) has worked examples and product pages.
 - [UnityFS AssetBundle archives](unityfs.md)
 - [iNES containers](ines-containers.md)
 - [WeChat mini-program wxapkg archives](wxapkg.md)
+- [ISO 9660 disc images](guides/firmware/iso9660-images.md)
 - [tar and gzip-compressed tar archives](tar-archives.md)
 - [GPU asset headers: DDS, GLB, KTX and KTX2](gpu-asset-headers.md)
 
@@ -174,6 +176,8 @@ The [REA website](https://rea.tools/) has worked examples and product pages.
 ## Contracts and evidence
 
 - [MCP runtime contracts](reference/mcp-contracts.md)
+- [Target failures](reference/target-failures.md)
+- [Directory identity](reference/directory-identity.md)
 - [Reconstruction obligation ledgers](reference/reconstruction-obligation-ledgers.md)
 - [Reconstruction coverage](reconstruction-coverage.md)
 

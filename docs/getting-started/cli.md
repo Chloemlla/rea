@@ -397,6 +397,17 @@ rea extract-artifact ./payload.bin --json
 See [Android OTA update payloads](../guides/firmware/android-ota-payload.md) for manifest
 facts, signature counting, REPLACE/ZERO reconstruction and delta limits.
 
+Inventory an Android sparse image and expand it to one raw partition image
+without `simg2img`:
+
+```sh
+rea inspect-artifact ./system.img --json
+rea extract-artifact ./system.img --json
+```
+
+See [Android sparse images](../guides/firmware/android-sparse-image.md) for chunk
+facts, DONT_CARE handling, unverified checksums and the expansion allowance.
+
 `inspect-artifact` and `extract-artifact` also read ZIP members compressed with
 Zstandard (standard method 93). They retain the shared ZIP CRC, declared-size,
 overlap and archive expansion checks. The native streaming decoder keeps the
@@ -443,6 +454,16 @@ rea extract-artifact ./vendor_boot.img --json
 See [Android boot images](../android-boot-image.md) for header versions 0 through
 4, vendor ramdisk table entries, stored compression, and the unverified AVB
 footer. `ANDROID!` does not record boot versus init_boot versus recovery.
+
+Inventory and extract an ISO 9660 disc image without mounting it:
+
+```sh
+rea inspect-artifact ./installer.iso --detail summary --evidence_output installer.json --json
+rea extract-artifact ./installer.iso --json
+```
+
+See [ISO 9660 disc images](../guides/firmware/iso9660-images.md) for volume facts, Joliet
+names, multi-extent and interleaved files, and what is not decoded.
 
 Inspect local model declarations without loading weights:
 
