@@ -17,9 +17,9 @@ import { invalidAnalysisView } from "./analysisViewErrors.js";
 import { namePrefixesSchema, startsWithAny } from "./namePrefixFilter.js";
 import { createAnalysisViewResultReader } from "./analysisViewParent.js";
 import {
-  boundedViewMessages,
+  boundedViewLimitations,
   completeWithinViewCoverage,
-  pageViewCoverage,
+  selectedViewPage,
 } from "./analysisViewCoverage.js";
 import { filterSet, pickFields, selectViewRows } from "./selectViewRows.js";
 
@@ -157,11 +157,7 @@ export const projectNativeExportsView = (
     parent_operation: "inspect_native_exports" as const,
     parent_digest: parent.evidenceId.slice(3),
     artifact: { path: report.artifact.path, sha256: report.artifact.sha256 },
-    limitations: boundedViewMessages(
-      [...parent.limitations, ...limitations],
-      parent.evidenceId,
-      "limitations",
-    ),
+    limitations: boundedViewLimitations(parent, limitations),
     unknowns:
       report.coverage.status === "complete"
         ? []
@@ -195,12 +191,7 @@ export const projectNativeExportsView = (
       kind: "native-exports" as const,
       view,
       exports: summary,
-      items: selected.rows,
-      coverage: pageViewCoverage(
-        view.offset,
-        selected.rows.length,
-        selected.total,
-      ),
+      ...selectedViewPage(view.offset, selected),
     });
   }
   const allowed =
@@ -233,11 +224,6 @@ export const projectNativeExportsView = (
     kind: "native-exports" as const,
     view,
     exports: summary,
-    items: selected.rows,
-    coverage: pageViewCoverage(
-      view.offset,
-      selected.rows.length,
-      selected.total,
-    ),
+    ...selectedViewPage(view.offset, selected),
   });
 };

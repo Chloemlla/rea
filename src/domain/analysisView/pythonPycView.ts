@@ -13,9 +13,9 @@ import {
 import { invalidAnalysisView } from "./analysisViewErrors.js";
 import { createAnalysisViewResultReader } from "./analysisViewParent.js";
 import {
-  boundedViewMessages,
+  boundedViewLimitations,
   completeWithinViewCoverage,
-  pageViewCoverage,
+  selectedViewPage,
 } from "./analysisViewCoverage.js";
 import { filterSet, selectViewRows } from "./selectViewRows.js";
 
@@ -79,11 +79,7 @@ export const projectPythonPycView = (
       path: identity.artifact.path,
       sha256: identity.artifact.sha256,
     },
-    limitations: boundedViewMessages(
-      [...parent.limitations, ...limitations],
-      parent.evidenceId,
-      "limitations",
-    ),
+    limitations: boundedViewLimitations(parent, limitations),
     unknowns: [],
   };
   if (view.kind === "summary")
@@ -119,11 +115,6 @@ export const projectPythonPycView = (
     kind: "python-pyc" as const,
     view,
     pyc: summary,
-    items: selected.rows,
-    coverage: pageViewCoverage(
-      view.offset,
-      selected.rows.length,
-      selected.total,
-    ),
+    ...selectedViewPage(view.offset, selected),
   });
 };

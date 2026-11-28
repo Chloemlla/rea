@@ -8,7 +8,7 @@ import {
   goStringLiteralsSchema,
   type GoBinary,
 } from "../go/goBinary.js";
-import { err, ok } from "../result.js";
+import { ok } from "../result.js";
 import type { AnalysisViewParent } from "./analysisViewParent.js";
 import { requireMetadataReportSubject } from "./metadataReportSubject.js";
 import {
@@ -17,15 +17,13 @@ import {
   type SummaryAnalysisView,
 } from "./analysisViewShape.js";
 import {
+  boundedViewLimitations,
   boundedViewMessages,
   completeWithinViewCoverage,
   pageViewCoverage,
   unavailableViewCoverage,
 } from "./analysisViewCoverage.js";
-import {
-  analysisViewInputError,
-  invalidAnalysisView,
-} from "./analysisViewErrors.js";
+import { invalidAnalysisView } from "./analysisViewErrors.js";
 import { createAnalysisViewResultReader } from "./analysisViewParent.js";
 import { filterSet, selectViewRows } from "./selectViewRows.js";
 
@@ -215,11 +213,7 @@ export const projectGoBinaryView = (
             ? ("truncated" as const)
             : ("complete" as const),
     },
-    limitations: boundedViewMessages(
-      [...parent.limitations, ...report.limitations],
-      parent.evidenceId,
-      "limitations",
-    ),
+    limitations: boundedViewLimitations(parent, report.limitations),
     unknowns: boundedViewMessages(
       unknowns.values,
       parent.evidenceId,
@@ -283,15 +277,9 @@ export const projectGoBinaryView = (
   const fields = filterSet<string>(view.fields);
   if (view.collection === "string_literals") {
     if (stringLiterals === undefined)
-      return err(
-        analysisViewInputError([
-          {
-            path: ["view", "collection"],
-            reason: "invalid_value",
-            message:
-              "Parent Go Evidence did not collect string_literals; re-run inspect_go_binary with include_string_literals: true.",
-          },
-        ]),
+      return invalidAnalysisView(
+        "Parent Go Evidence did not collect string_literals; re-run inspect_go_binary with include_string_literals: true.",
+        "collection",
       );
     const values = filterSet(view.values);
     const needle = view.contains;

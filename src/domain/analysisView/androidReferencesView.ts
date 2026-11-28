@@ -5,7 +5,7 @@ import { androidReferencesViewSchema } from "../android/androidReferencesQuery.j
 import { evidenceSubjectTarget } from "../evidence.js";
 import { boundedList } from "../boundedList.js";
 import type { JsonValue } from "../jsonValue.js";
-import { err, ok } from "../result.js";
+import { ok } from "../result.js";
 import {
   PLACEHOLDER_COVERAGE,
   selectByteBoundedViewRows,
@@ -13,15 +13,15 @@ import {
 } from "./byteBoundedViewRows.js";
 import { filterSet, pickFields } from "./selectViewRows.js";
 import {
-  analysisViewInputError,
   invalidAnalysisViewSubject,
+  invalidAnalysisView,
 } from "./analysisViewErrors.js";
 import {
   createAnalysisViewResultReader,
   type AnalysisViewParent,
 } from "./analysisViewParent.js";
 import {
-  boundedViewMessages,
+  boundedViewLimitations,
   completeWithinViewCoverage,
   pageViewCoverage,
 } from "./analysisViewCoverage.js";
@@ -264,14 +264,9 @@ export const projectAndroidReferencesView = (
   admitted: AdmittedView,
 ) => {
   if (admitted.kind !== "android-references" && admitted.kind !== "summary")
-    return err(
-      analysisViewInputError([
-        {
-          path: ["view", "kind"],
-          reason: "invalid_value",
-          message: "Select an android-references or summary view.",
-        },
-      ]),
+    return invalidAnalysisView(
+      "Select an android-references or summary view.",
+      "kind",
     );
   assertOwnedView<SummaryAnalysisView | ReferencesView>(
     admitted,
@@ -292,11 +287,7 @@ export const projectAndroidReferencesView = (
     parent_operation: TRACE_ANDROID_REFERENCES_OPERATION,
     parent_digest: parent.evidenceId.slice(3),
     artifact: { path: subject.path, sha256: subject.sha256 },
-    limitations: boundedViewMessages(
-      [...parent.limitations],
-      parent.evidenceId,
-      "limitations",
-    ),
+    limitations: boundedViewLimitations(parent),
     unknowns: [
       "Static using nodes do not establish runtime calls, reflection or dynamic dispatch.",
     ],

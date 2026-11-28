@@ -182,13 +182,19 @@ it.each(["fast", "full"] as const)(
       (command) => command.includes("mutation") || command.includes("stryker"),
     );
     expect(mutationCommands).toEqual([
+      "npm run verify:mutation-targets",
       "node scripts/prepare-reverse-tools-mutation.mjs",
       "npx --no-install stryker run stryker.config.mjs --dryRunOnly",
       "npx --no-install stryker run stryker.semantics.config.mjs --dryRunOnly",
     ]);
+    const guard = commands.indexOf("npm run verify:mutation-targets");
     const coverage = commands.indexOf("npm run test:coverage:reverse-tools");
-    expect(coverage).toBeGreaterThanOrEqual(0);
-    expect(coverage).toBeLessThan(commands.indexOf(mutationCommands[0]!));
+    const preflight = commands.indexOf(
+      "node scripts/prepare-reverse-tools-mutation.mjs",
+    );
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(coverage).toBeGreaterThan(guard);
+    expect(preflight).toBeGreaterThan(coverage);
 
     const flags = await scopeFlags();
     const context: Record<
@@ -401,7 +407,10 @@ it("records the actual static task graph with explicit source identity and no am
     script: "check:ci:deep:tasks",
   });
   expect(deep.taskHashes.jscpd).toMatch(/^[a-f0-9]{16}$/u);
-  expect(deep.taskHashes.knip).toMatch(/^[a-f0-9]{16}$/u);
+  // Knip runs in the build job, after the workers it resolves exist.
+  expect(deep.taskHashes).not.toHaveProperty("knip");
+  // The Python producer suite later in the deep job imports the runtime.
+  expect(deep.taskHashes.compile).toMatch(/^[a-f0-9]{16}$/u);
   expect(deep.taskHashes).not.toHaveProperty("lint");
   await expect(
     recordStaticTaskContext({

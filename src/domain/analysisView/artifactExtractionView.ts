@@ -10,22 +10,22 @@ import { prefixedDigestSchema } from "../digests.js";
 import { evidenceSubjectTarget } from "../evidence.js";
 import type { JsonValue } from "../jsonValue.js";
 import { jsonValueByteLength } from "../jsonValueByteLength.js";
-import { err, ok } from "../result.js";
+import { ok } from "../result.js";
 import {
   PLACEHOLDER_COVERAGE,
   selectByteBoundedViewRows,
   type ByteBoundedPageOwner,
 } from "./byteBoundedViewRows.js";
 import {
-  analysisViewInputError,
   invalidAnalysisViewSubject,
+  invalidAnalysisView,
 } from "./analysisViewErrors.js";
 import {
   createAnalysisViewResultReader,
   type AnalysisViewParent,
 } from "./analysisViewParent.js";
 import {
-  boundedViewMessages,
+  boundedViewLimitations,
   completeWithinViewCoverage,
   pageViewCoverage,
 } from "./analysisViewCoverage.js";
@@ -255,14 +255,9 @@ export const projectArtifactExtractionView = (
   admitted: AdmittedView,
 ) => {
   if (admitted.kind !== "artifact-extraction" && admitted.kind !== "summary")
-    return err(
-      analysisViewInputError([
-        {
-          path: ["view", "kind"],
-          reason: "invalid_value",
-          message: "Select an artifact-extraction or summary view.",
-        },
-      ]),
+    return invalidAnalysisView(
+      "Select an artifact-extraction or summary view.",
+      "kind",
     );
   assertOwnedView<SummaryAnalysisView | ExtractionView>(
     admitted,
@@ -282,11 +277,7 @@ export const projectArtifactExtractionView = (
     parent_operation: EXTRACT_ARTIFACT_OPERATION,
     parent_digest: parent.evidenceId.slice(3),
     artifact: { path: subject.path, sha256: subject.sha256 },
-    limitations: boundedViewMessages(
-      [...parent.limitations],
-      parent.evidenceId,
-      "limitations",
-    ),
+    limitations: boundedViewLimitations(parent),
     unknowns: [
       "Written files reflect the extraction when it ran; later changes under output_root are not observed.",
     ],
